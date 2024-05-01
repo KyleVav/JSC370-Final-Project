@@ -1,5 +1,6 @@
 ---
-title: "JSC370 Midterm"
+title: "Home Ownership Rates in the United States Between Generations"
+author: "Kyle Vavasour"
 output: pdf_document
 date: "2024-03-05"
 ---
@@ -656,7 +657,8 @@ buying a home, could have contributed to the high home ownership rates of
 Gen Z relative to the other generations.
 
 \
-See the interactive visualizations on the website for the following analysis.
+To see the interactive visualization of home ownership rates by state 
+between generations that is analyzed in the following paragraph click [here](https://kylevav.github.io/JSC370-Final-Project/visuals.html#Home_ownership_rates_by_state_and_generation).
 
 \
 The map shows home ownership rates by state and generation. We can see that 
@@ -673,7 +675,9 @@ but surprisingly Florida is one of the states with the highest home ownership
 rate which is unique to Gen Z.
 
 \
-See the interactive visualizations on the website for the following analysis.
+\
+To see the interactive visualization of home ownership rates by county 
+between generations that is analyzed in the following paragraph click [here](https://kylevav.github.io/JSC370-Final-Project/visuals.html#Home_ownership_rates_by_county_and_generation).
 
 \
 Similar to the previous map, this map shows home ownership rates by

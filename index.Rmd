@@ -53,7 +53,9 @@ only the variables and year range of interest described in the methods section.
 
 ## Access the Project
 
-To view the full report, please click here.
+To view the full report, please click [here](https://github.com/KyleVav/JSC370-Final-Project/blob/main/report.pdf).
+
+To view the project repository, please click [here](https://github.com/KyleVav/JSC370-Final-Project).
 
 ## Citations
 
