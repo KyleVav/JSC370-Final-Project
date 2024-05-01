@@ -57,6 +57,8 @@ To view the full report, please click [here](https://github.com/KyleVav/JSC370-F
 
 To view the project repository, please click [here](https://github.com/KyleVav/JSC370-Final-Project).
 
+To view a video tour of the website, please click [here](https://drive.google.com/file/d/1ewmYf7QtHn_64Rap_fhGT5azFlwAlZ8G/view?usp=sharing).
+
 ## Citations
 
 Sarah Flood, Miriam King, Renae Rodgers, Steven Ruggles, J. Robert Warren,
