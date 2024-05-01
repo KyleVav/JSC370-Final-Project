@@ -1,0 +1,2 @@
+"0","# key variables are AGE, RELATE, OWNERSHP, ASECWTH, YEAR"
+"0","data <- data %>% select(AGE, RELATE, OWNERSHP, ASECWTH, YEAR, STATEFIP, COUNTY, HHINCOME, INCRETIR)"

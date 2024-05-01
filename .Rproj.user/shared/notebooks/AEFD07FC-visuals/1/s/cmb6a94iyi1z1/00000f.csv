@@ -1,0 +1,48 @@
+"0","# additional variables"
+"0",""
+"0","# https://fred.stlouisfed.org/series/MORTGAGE30US"
+"0","intrest_rates <- read_csv('./data/MORTGAGE30US.csv')"
+"2","[1mRows: [22m[34m2770[39m [1mColumns: [22m[34m2[39m"
+"2","[36m──[39m [1mColumn specification[22m [36m────────────────────────────────────────────────────────────────────────────────────────[39m
+[1mDelimiter:[22m "",""
+[32mdbl[39m  (1): MORTGAGE30US
+[34mdate[39m (1): DATE"
+"2","
+[36mℹ[39m Use `spec()` to retrieve the full column specification for this data.
+[36mℹ[39m Specify the column types or set `show_col_types = FALSE` to quiet this message."
+"0","intrest_rates <- intrest_rates[grepl('-03-', intrest_rates$DATE),]"
+"0","intrest_rates$DATE <- as.numeric(format(as.Date(intrest_rates$DATE, format=""%d-%m-%Y""),""%Y""))"
+"0","intrest_rates <- intrest_rates %>%"
+"0","  group_by(DATE) %>%"
+"0","  summarise(INTREST = mean(MORTGAGE30US))"
+"0",""
+"0","inflation <- read_csv('./data/inflation.csv')"
+"2","[1mRows: [22m[34m62[39m [1mColumns: [22m[34m6[39m"
+"2","[36m──[39m [1mColumn specification[22m [36m────────────────────────────────────────────────────────────────────────────────────────[39m
+[1mDelimiter:[22m "",""
+[31mchr[39m (4): Income Year, X, =, 1999 dollars
+[32mdbl[39m (2): Data Year, CPI99"
+"2","
+[36mℹ[39m Use `spec()` to retrieve the full column specification for this data.
+[36mℹ[39m Specify the column types or set `show_col_types = FALSE` to quiet this message."
+"0","inflation$year <- as.numeric(inflation$`Data Year`)-1"
+"0","inflation$multiply <- as.numeric(inflation$CPI99)"
+"0","inflation <- inflation %>%"
+"0","  select(year, multiply) %>%"
+"0","  drop_na()"
+"0",""
+"0","#https://dqydj.com/historical-home-prices/"
+"0","housing_prices <- read_csv('./data/homeprice.csv')"
+"2","[1mRows: [22m[34m853[39m [1mColumns: [22m[34m3[39m"
+"2","[36m──[39m [1mColumn specification[22m [36m────────────────────────────────────────────────────────────────────────────────────────[39m
+[1mDelimiter:[22m "",""
+[31mchr[39m (1): category
+[32mdbl[39m (2): Median Home Price (NSA), CPI-Adjusted Price"
+"2","
+[36mℹ[39m Use `spec()` to retrieve the full column specification for this data.
+[36mℹ[39m Specify the column types or set `show_col_types = FALSE` to quiet this message."
+"0","housing_prices <- housing_prices[grepl('Mar', housing_prices$category),]"
+"0","housing_prices$year <- 1953:2023"
+"0","housing_prices <- housing_prices %>%"
+"0","  select(year, `CPI-Adjusted Price`) %>%"
+"0","  filter(year >= 1976)"

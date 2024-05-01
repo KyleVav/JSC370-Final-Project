@@ -1,0 +1,2 @@
+"0","# filter younger than 18"
+"0","data <- data %>% filter(AGE >= 19 & AGE <= 90)"

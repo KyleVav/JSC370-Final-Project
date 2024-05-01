@@ -1,0 +1,8 @@
+"0","# create the generation variable"
+"0","data <- data %>%"
+"0","  mutate(GEN = ifelse( (YEAR-AGE >= 1946) & (YEAR-AGE <= 1964), ""Baby Boomer"","
+"0","               ifelse( (YEAR-AGE >= 1965) & (YEAR-AGE <= 1980), ""Gen X"","
+"0","               ifelse( (YEAR-AGE >= 1981) & (YEAR-AGE <= 1996), ""Millenial"","
+"0","               ifelse( (YEAR-AGE >= 1997) & (YEAR-AGE <= 2012), ""Gen Z"", "
+"0","               ""Pre 1946"")))))"
+"0","data$GEN <- factor(data$GEN, levels=c(""Baby Boomer"", ""Gen X"", ""Millenial"", ""Gen Z"", ""Pre 1946""))"

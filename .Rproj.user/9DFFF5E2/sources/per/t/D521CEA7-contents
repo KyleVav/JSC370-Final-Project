@@ -1,0 +1,55 @@
+---
+title: "Home ownership rates in the U.S. between generations"
+author: "Kyle Vavasour"
+output: 
+    html_document:
+        toc: TRUE
+        toc_float: TRUE
+---
+
+## Introduction
+
+In recent years there has been an increasing pessimism about the prospect of 
+owning a home, with younger generations dissatisfied how older generations
+own homes while they cannot afford to. Younger generations may question whether
+they will ever be able to own their own homes, and compare themselves to 
+the seemingly far favorable conditions for older generations; indeed, home 
+ownership and housing affordability is often cited as a core issue for
+younger generations [1].
+
+\
+The goal of this project is to 
+examine differences in home ownership between generations through home ownership rates by 
+year, age, and locations. The proposed research question is: Have home ownership rates in 
+the United States changed between the generations of Baby Boomers, Gen X, Millennials, 
+and Gen Z?
+
+\
+The dataset that was used to answer this question is a subset of the 
+IPSUM CPS dataset. The dataset comes from the United States
+Census Current Population Survey (CPS) and its supplemental Annual Social and 
+Economic Supplement survey (ASEC). The CPS is preformed monthly to different
+households in the US while the ASEC supplement is preformed annualy in March.
+The dataset contains both household and individual level information, meaning
+some variables refer to entire household information such as whether a house
+is owned or rented, while other variables refer to individual information
+such as a persons age.
+
+\
+As the entire IPUMS CPS dataset is large and contains many variables
+that are irrelevant to this analysis, a subset of the data was used containing
+only the variables and year range of interest described in the methods section.
+
+## Access the Project
+
+To view the full report, please click here.
+
+## Citations
+
+Sarah Flood, Miriam King, Renae Rodgers, Steven Ruggles, J. Robert Warren,
+Daniel Backman, Annie Chen, Grace Cooper, Stephanie Richards, Megan
+Schouweiler, and Michael Westberry. IPUMS CPS: Version 11.0 [dataset].
+Minneapolis, MN: IPUMS, 2023. https://doi.org/10.18128/D030.V11.0
+
+\
+[1] O’Donnell, K. (2022, August 2). Young people are pissed off: Housing crush sours millennial voters. Politico. https://www.politico.com/news/2022/08/02/housing-millennials-biden-economy-00047704 

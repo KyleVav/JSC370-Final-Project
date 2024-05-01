@@ -1,0 +1,602 @@
+---
+title: "Interactive Visualizations"
+output: 
+    html_document:
+        toc: TRUE
+        toc_float: TRUE
+---
+
+```{r warning=FALSE, echo=FALSE, output='none', message=FALSE}
+library(ipumsr)
+library(raster)
+library(tidyverse)
+library(gridExtra)
+library(httr)
+library(leaflet)
+library(kableExtra)
+library(mgcv)
+library(plotly)
+```
+
+
+```{r echo=FALSE, output='none', warning=FALSE, message=FALSE}
+# Use IPUMS functions to get data table
+ddi <- read_ipums_ddi("./data/xml_file.xml")
+data <- read_ipums_micro(ddi, data_file="./data/data_file.dat.gz")
+```
+
+```{r eval=FALSE, echo=FALSE}
+# key variables are AGE, RELATE, OWNERSHP, ASECWTH, YEAR
+data <- data %>% select(AGE, RELATE, OWNERSHP, ASECWTH, YEAR, STATEFIP, COUNTY, HHINCOME, INCRETIR)
+```
+
+```{r, echo=FALSE}
+# filter younger than 18
+data <- data %>% filter(AGE >= 19 & AGE <= 90)
+```
+
+```{r echo=FALSE}
+# create the generation variable
+data <- data %>%
+  mutate(GEN = ifelse( (YEAR-AGE >= 1946) & (YEAR-AGE <= 1964), "Baby Boomer",
+               ifelse( (YEAR-AGE >= 1965) & (YEAR-AGE <= 1980), "Gen X",
+               ifelse( (YEAR-AGE >= 1981) & (YEAR-AGE <= 1996), "Millenial",
+               ifelse( (YEAR-AGE >= 1997) & (YEAR-AGE <= 2012), "Gen Z", 
+               "Pre 1946")))))
+data$GEN <- factor(data$GEN, levels=c("Baby Boomer", "Gen X", "Millenial", "Gen Z", "Pre 1946"))
+```
+
+### Home ownership rate by year and generation
+
+```{r echo=FALSE}
+plot1 <- data %>%
+  filter(GEN != 'Pre 1946') %>%
+  filter(RELATE == 0101) %>%
+  group_by(YEAR, GEN) %>%
+  summarise(RATE = 100*weighted.mean(OWNERSHP==10, ASECWTH), .groups="rowwise") %>%
+  drop_na() %>%
+  ggplot(aes(x=YEAR, y=RATE, color=GEN)) +
+  geom_line(linewidth=1) +
+  ylim(0, 100) +
+  theme(legend.position="bottom") +
+  labs(x="Year", y="Home Owneship Rate (%)", title="Home Ownership Rate by Year and Generation",
+       color="Generation:")
+ggplotly(plot1)
+```
+\
+This plot shows the trend of home ownership by year between each generation from
+1976-2023.
+
+### Home ownership rates by age and generation
+
+```{r echo=FALSE}
+plot2 <- data %>%
+  filter(GEN != 'Pre 1946') %>%
+  filter(RELATE==0101) %>%
+  group_by(AGE, GEN) %>%
+  summarise(RATE = 100*weighted.mean(OWNERSHP==10, ASECWTH), .groups="rowwise") %>%
+  drop_na() %>%
+  ggplot(aes(x=AGE, y=RATE, color=GEN)) +
+  geom_line(linewidth=1) +
+  ylim(0, 100) +
+  theme(legend.position="bottom") +
+  labs(x="Age (Years)", y="Home Owneship Rate (%)", title="Home Ownership Rate by Age and Generation",
+       color="Generation:")
+ggplotly(plot2)
+```
+
+\
+This plot shows the trend of home ownership by age between each generation for
+ages 19 to the maximum age the generation could be in 2023. 
+
+### Home ownership rates by state and generation
+
+```{r echo=FALSE}
+# setup proportions of homeowners by state for different generations
+states <- geojsonio::geojson_read("https://rstudio.github.io/leaflet/json/us-states.geojson", what = "sp")
+map_states <- data.frame(id=as.numeric(states$id))
+owners_by_state <- data %>% 
+  filter(RELATE == 0101) %>%
+  filter(GEN != 'Pre 1946') %>%
+  group_by(GEN, STATEFIP) %>%
+  reframe(p = round(100*weighted.mean(OWNERSHP==10, ASECWTH), digits=2)) %>%
+  drop_na() %>%
+  right_join(map_states, join_by(STATEFIP==id)) %>%
+  pivot_wider(names_from=GEN, values_from=p) %>%
+  select(!"NA")
+states$boomer <- owners_by_state[match(map_states$id, owners_by_state$STATEFIP),]$"Baby Boomer"
+states$millenial <- owners_by_state[match(map_states$id, owners_by_state$STATEFIP),]$"Millenial"
+states$genx <- owners_by_state[match(map_states$id, owners_by_state$STATEFIP),]$"Gen X"
+states$genz <- owners_by_state[match(map_states$id, owners_by_state$STATEFIP),]$"Gen Z"
+```
+
+```{r warning=FALSE, echo=FALSE, message=FALSE, output='none'}
+bins <- c(0, 20, 30, 40, 50, 60, 70, 80, 90, 100)
+
+# palettes
+pal1 <- colorBin("YlOrRd", domain = states$boomer, bins = bins)
+pal2 <- colorBin("YlOrRd", domain = states$genx, bins = bins)
+pal3 <- colorBin("YlOrRd", domain = states$millenial, bins = bins)
+pal4 <- colorBin("YlOrRd", domain = states$genz, bins = bins)
+
+# generation labels
+labelsBoomer <- sprintf(
+  "<strong>%s</strong><br/>%g &#37 of Homeowners",
+  states$name, states$boomer
+) %>% lapply(htmltools::HTML)
+labelsGenX <- sprintf(
+  "<strong>%s</strong><br/>%g &#37 of Homeowners",
+  states$name, states$genx
+) %>% lapply(htmltools::HTML)
+labelsMillenial <- sprintf(
+  "<strong>%s</strong><br/>%g &#37 of Homeowners",
+  states$name, states$millenial
+) %>% lapply(htmltools::HTML)
+labelsGenZ <- sprintf(
+  "<strong>%s</strong><br/>%g &#37 of Homeowners",
+  states$name, states$genz
+) %>% lapply(htmltools::HTML)
+
+# setup
+state_leaflet <- leaflet(states) %>%
+  setView(-96, 37.8, 4) %>%
+  addProviderTiles("MapBox", options = providerTileOptions(
+    id = "mapbox.light",
+    accessToken = Sys.getenv('MAPBOX_ACCESS_TOKEN'))) 
+
+# Baby Boomers
+state_leaflet <- state_leaflet %>%
+  addPolygons(
+    group = "Baby Boomer",
+    fillColor = ~pal1(boomer),
+    weight = 2,
+    opacity = 1,
+    color = "white",
+    dashArray = "3",
+    fillOpacity = 0.7,
+    highlightOptions = highlightOptions(
+      weight = 5,
+      color = "#666",
+      dashArray = "",
+      fillOpacity = 0.7,
+      bringToFront = TRUE),
+    label = labelsBoomer,
+    labelOptions = labelOptions(
+      style = list("font-weight" = "normal", padding = "3px 8px"),
+      textsize = "15px",
+      direction = "auto"))
+
+# Gen X
+state_leaflet <- state_leaflet %>%
+  addPolygons(
+    group = "Gen X",
+    fillColor = ~pal2(genx),
+    weight = 2,
+    opacity = 1,
+    color = "white",
+    dashArray = "3",
+    fillOpacity = 0.7,
+    highlightOptions = highlightOptions(
+      weight = 5,
+      color = "#666",
+      dashArray = "",
+      fillOpacity = 0.7,
+      bringToFront = TRUE),
+    label = labelsGenX,
+    labelOptions = labelOptions(
+      style = list("font-weight" = "normal", padding = "3px 8px"),
+      textsize = "15px",
+      direction = "auto"))
+
+# Millenial
+state_leaflet <- state_leaflet %>%
+  addPolygons(
+    group = "Millenial",
+    fillColor = ~pal3(millenial),
+    weight = 2,
+    opacity = 1,
+    color = "white",
+    dashArray = "3",
+    fillOpacity = 0.7,
+    highlightOptions = highlightOptions(
+      weight = 5,
+      color = "#666",
+      dashArray = "",
+      fillOpacity = 0.7,
+      bringToFront = TRUE),
+    label = labelsMillenial,
+    labelOptions = labelOptions(
+      style = list("font-weight" = "normal", padding = "3px 8px"),
+      textsize = "15px",
+      direction = "auto"))
+
+# Gen Z
+state_leaflet <- state_leaflet %>%
+  addPolygons(
+    group = "Gen Z",
+    fillColor = ~pal4(genz),
+    weight = 2,
+    opacity = 1,
+    color = "white",
+    dashArray = "3",
+    fillOpacity = 0.7,
+    highlightOptions = highlightOptions(
+      weight = 5,
+      color = "#666",
+      dashArray = "",
+      fillOpacity = 0.7,
+      bringToFront = TRUE),
+    label = labelsGenZ,
+    labelOptions = labelOptions(
+      style = list("font-weight" = "normal", padding = "3px 8px"),
+      textsize = "15px",
+      direction = "auto"))
+
+state_leaflet %>%
+  addLegend(pal = pal1, values = ~boomer, opacity = 0.7, title = NULL,
+    position = "bottomright") %>%
+  addLayersControl(
+    baseGroups = c("Baby Boomer", "Gen X", "Millenial", "Gen Z"),
+    options = layersControlOptions(collapsed = FALSE)
+  )
+```
+\
+This map shows home ownership rates by state and generation, different generations
+can be toggled using the buttons on the right.
+
+### Home ownership rates by county and generation
+
+```{r echo=FALSE}
+# setup proportions of homeowners by county for different generations
+counties <- geojsonio::geojson_read("https://gist.githubusercontent.com/sdwfrost/d1c73f91dd9d175998ed166eb216994a/raw/e89c35f308cee7e2e5a784e1d3afc5d449e9e4bb/counties.geojson", what = "sp")
+map_codes <- data.frame(fip = as.numeric(paste0(counties$STATEFP, counties$COUNTYFP)))
+owners_by_county <- data %>% 
+  filter(GEN != 'Pre 1946') %>%
+  filter(RELATE == 0101) %>%
+  group_by(COUNTY, GEN) %>%
+  reframe(p = round(100*weighted.mean(OWNERSHP==10, ASECWTH), digits=2)) %>%
+  filter(COUNTY != 0 & !is.na(COUNTY)) %>%
+  right_join(map_codes, join_by(COUNTY==fip)) %>%
+  pivot_wider(names_from=GEN, values_from=p) %>%
+  select(!"NA")
+counties$boomer <- owners_by_county[match(map_codes$fip, owners_by_county$COUNTY),]$"Baby Boomer"
+counties$millenial <- owners_by_county[match(map_codes$fip, owners_by_county$COUNTY),]$"Millenial"
+counties$genx <- owners_by_county[match(map_codes$fip, owners_by_county$COUNTY),]$"Gen X"
+counties$genz <- owners_by_county[match(map_codes$fip, owners_by_county$COUNTY),]$"Gen Z"
+```
+
+```{r echo=FALSE}
+# counties < 100 observations in any generation
+include_county <- data %>%
+  filter(GEN != 'Pre 1946') %>%
+  filter(!is.na(COUNTY) & COUNTY != 0) %>%
+  group_by(COUNTY, GEN) %>%
+  summarise(n = n(), .groups = 'rowwise') %>%
+  pivot_wider(names_from=GEN, values_from = n) %>%
+  drop_na() %>%
+  filter(.[[1]] >= 50, .[[2]] >= 50, .[[3]] >= 50, .[[4]] >= 50) %>%
+  select(COUNTY)
+codes <- paste0(counties@data$STATEFP, counties@data$COUNTYFP)
+```
+
+```{r echo=FALSE}
+max = as.numeric(counties@polygons[[length(counties@polygons)]]@ID)
+spoly <- list()
+ids <- list()
+mapdata <- data.frame(matrix(1, ncol=ncol(counties@data), nrow=0))
+colnames(mapdata) <- colnames(counties@data)
+
+vec <- c('Baby Boomer', 'Millenial', 'Gen X', 'Gen Z')
+fips <- data.frame(id=as.integer(states@data$id), name=states@data$name)
+statedata <- data %>%
+    filter(GEN != "Pre 1946") %>%
+    filter(RELATE == 0101 & COUNTY==0) %>%
+    group_by(GEN, STATEFIP) %>%
+    reframe(x1=1, x2=1, x3=1, x4=1, temp=1, x5=1, x6=1, x7=1, 
+            p = 100*round(weighted.mean(OWNERSHP==10, ASECWTH), digits=2)) %>%
+    arrange(match(GEN, vec)) %>%
+    pivot_wider(names_from = GEN, values_from = p) %>%
+    right_join(fips, join_by(STATEFIP==id)) %>%
+    mutate(temp = paste0(name, " w/o Counties")) %>%
+    select(-name) %>%
+    arrange(STATEFIP) %>%
+    as.data.frame()
+
+for (i in 1:51) {
+  
+  if (i==2) next #skip alaska since it crashes r
+  
+  # state polygon setup
+  x <- states@polygons[[i]]
+  pid <- x@ID
+  fip <- as.numeric(states@data[pid,"id"])
+  name <- states@data[pid,"name"]
+  x@ID <- as.character(as.numeric(x@ID)+max)
+  pid <- x@ID
+  x <- SpatialPolygons(list(x))
+  
+  # county polygon setup
+  y <- counties
+  
+  idx <- intersect(
+    which(as.numeric(y$STATEFP)==fip),
+    which(!(is.na(counties$boomer) | is.na(counties$genx) | is.na(counties$millenial) | is.na(counties$genz)))
+  )
+  
+  idx <- intersect(
+    which(as.numeric(y$STATEFP)==fip),
+    which(str_remove(codes, "^0+") %in% include_county$COUNTY)
+  )
+
+  y <- SpatialPolygons(y@polygons[idx])
+  
+  #
+  if (length(idx)==0) z <- x else  z <- x - y
+  
+  UNNESTED <- list()
+  unnest_polygons <- function(a) {
+    if (class(a)=="Polygons") {
+      lapply(a@Polygons, unnest_polygons)
+    } else if (class(a)=="Polygon") {
+      UNNESTED <<- c(UNNESTED, a)
+    }
+  }
+  
+  lapply(z@polygons, unnest_polygons)
+  z <- Polygons(UNNESTED, ID=pid)
+  z <- list(z)
+  
+  mapdata[pid,] = statedata[statedata$STATEFIP==fip,]
+  spoly <- c(spoly, z)
+  ids <- c(ids, pid)
+  
+}
+```
+
+```{r echo=FALSE}
+idx <- intersect(
+  which(!(is.na(counties$boomer) | is.na(counties$genx) | is.na(counties$millenial) | is.na(counties$genz))),
+  which(str_remove(codes, "^0+") %in% include_county$COUNTY)
+)
+idx <- which(str_remove(codes, "^0+") %in% include_county$COUNTY)
+
+state_county <- SpatialPolygons(counties@polygons[idx])
+state_county <- SpatialPolygonsDataFrame(state_county, counties@data[idx,])
+
+state_county@polygons <- c(state_county@polygons, spoly)
+state_county@data <- rbind(state_county@data, mapdata)
+state_county@plotOrder <- c(as.integer(seq(from=length(state_county@plotOrder)+1, 
+                                to=length(state_county@plotOrder)+length(spoly),
+                                by=1)), state_county@plotOrder)
+```
+
+```{r warning=FALSE, echo=FALSE, message=FALSE}
+bins <- c(0, 20, 30, 40, 50, 60, 70, 80, 90, 100)
+
+# palettes
+pal <- colorBin("YlOrRd", domain = state_county$boomer, bins = bins)
+
+# generation labels
+labelsBoomer <- sprintf(
+  "<strong>%s</strong><br/>%g &#37 of Homeowners",
+  state_county$NAME, state_county$boomer
+) %>% lapply(htmltools::HTML)
+labelsGenX <- sprintf(
+  "<strong>%s</strong><br/>%g &#37 of Homeowners",
+  state_county$NAME, state_county$genx
+) %>% lapply(htmltools::HTML)
+labelsMillenial <- sprintf(
+  "<strong>%s</strong><br/>%g &#37 of Homeowners",
+  state_county$NAME, state_county$millenial
+) %>% lapply(htmltools::HTML)
+labelsGenZ <- sprintf(
+  "<strong>%s</strong><br/>%g &#37 of Homeowners",
+  state_county$NAME, state_county$genz
+) %>% lapply(htmltools::HTML)
+
+# setup
+state_leaflet <- leaflet(state_county) %>%
+  setView(-96, 37.8, 4) %>%
+  addProviderTiles("MapBox", options = providerTileOptions(
+    id = "mapbox.light",
+    accessToken = Sys.getenv('MAPBOX_ACCESS_TOKEN'))) 
+
+# Baby Boomers
+state_leaflet <- state_leaflet %>%
+  addPolygons(
+    group = "Baby Boomer",
+    fillColor = ~pal(boomer),
+    weight = 1,
+    opacity = 1,
+    color = "white",
+    dashArray = "3",
+    fillOpacity = 0.7,
+    highlightOptions = highlightOptions(
+      weight = 1,
+      color = "#666",
+      dashArray = "",
+      fillOpacity = 0.7,
+      bringToFront = TRUE),
+    label = labelsBoomer,
+    labelOptions = labelOptions(
+      style = list("font-weight" = "normal", padding = "3px 8px"),
+      textsize = "15px",
+      direction = "auto"))
+
+# Gen X
+state_leaflet <- state_leaflet %>%
+  addPolygons(
+    group = "Gen X",
+    fillColor = ~pal(genx),
+    weight = 1,
+    opacity = 1,
+    color = "white",
+    dashArray = "3",
+    fillOpacity = 0.7,
+    highlightOptions = highlightOptions(
+      weight = 1,
+      color = "#666",
+      dashArray = "",
+      fillOpacity = 0.7,
+      bringToFront = TRUE),
+    label = labelsGenX,
+    labelOptions = labelOptions(
+      style = list("font-weight" = "normal", padding = "3px 8px"),
+      textsize = "15px",
+      direction = "auto"))
+
+# Millennial
+state_leaflet <- state_leaflet %>%
+  addPolygons(
+    group = "Millennial",
+    fillColor = ~pal(millenial),
+    weight = 1,
+    opacity = 1,
+    color = "white",
+    dashArray = "3",
+    fillOpacity = 0.7,
+    highlightOptions = highlightOptions(
+      weight = 1,
+      color = "#666",
+      dashArray = "",
+      fillOpacity = 0.7,
+      bringToFront = TRUE),
+    label = labelsMillenial,
+    labelOptions = labelOptions(
+      style = list("font-weight" = "normal", padding = "3px 8px"),
+      textsize = "15px",
+      direction = "auto"))
+
+# Gen Z
+state_leaflet <- state_leaflet %>%
+  addPolygons(
+    group = "Gen Z",
+    fillColor = ~pal(genz),
+    weight = 1,
+    opacity = 1,
+    color = "white",
+    dashArray = "3",
+    fillOpacity = 0.7,
+    highlightOptions = highlightOptions(
+      weight = 1,
+      color = "#666",
+      dashArray = "",
+      fillOpacity = 0.7,
+      bringToFront = TRUE),
+    label = labelsGenZ,
+    labelOptions = labelOptions(
+      style = list("font-weight" = "normal", padding = "3px 8px"),
+      textsize = "15px",
+      direction = "auto"))
+
+state_leaflet %>%
+  addLegend(pal = pal, values = ~boomer, opacity = 0.7, title = NULL,
+    position = "bottomright") %>%
+  addLayersControl(
+    baseGroups = c("Baby Boomer", "Gen X", "Millennial", "Gen Z"),
+    options = layersControlOptions(collapsed = FALSE)
+  )
+```
+\
+This map shows home ownership rates by county and generation. This map includes 
+counties that were identified in the dataset, many counties were not identified 
+in the dataset as their population was below a threshold were there are concerns about 
+deanonymizing the data. All counties that were not identified in the dataset and any
+county with less than 50 observations in any generation are combined 
+into the state and labeled "State w/o Counties".
+
+### 2019-2023 home ownership rate projection using GAM
+
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+# additional variables
+
+# https://fred.stlouisfed.org/series/MORTGAGE30US
+intrest_rates <- read_csv('./data/MORTGAGE30US.csv')
+intrest_rates <- intrest_rates[grepl('-03-', intrest_rates$DATE),]
+intrest_rates$DATE <- as.numeric(format(as.Date(intrest_rates$DATE, format="%d-%m-%Y"),"%Y"))
+intrest_rates <- intrest_rates %>%
+  group_by(DATE) %>%
+  summarise(INTREST = mean(MORTGAGE30US))
+
+inflation <- read_csv('./data/inflation.csv')
+inflation$year <- as.numeric(inflation$`Data Year`)-1
+inflation$multiply <- as.numeric(inflation$CPI99)
+inflation <- inflation %>%
+  select(year, multiply) %>%
+  drop_na()
+
+#https://dqydj.com/historical-home-prices/
+housing_prices <- read_csv('./data/homeprice.csv')
+housing_prices <- housing_prices[grepl('Mar', housing_prices$category),]
+housing_prices$year <- 1953:2023
+housing_prices <- housing_prices %>%
+  select(year, `CPI-Adjusted Price`) %>%
+  filter(year >= 1976)
+```
+
+```{r echo=FALSE}
+annual_rates <- data %>%
+  left_join(inflation, join_by(YEAR == year)) %>%
+  left_join(intrest_rates, join_by(YEAR == DATE)) %>%
+  left_join(housing_prices, join_by(YEAR == year)) %>%
+  mutate(HHINCOME = HHINCOME * multiply,
+         INCRETIR = INCRETIR * multiply) %>%
+  filter(GEN != 'Pre 1946') %>%
+  filter(RELATE == 0101) %>%
+  group_by(YEAR, GEN) %>%
+  summarise(RATE = weighted.mean(OWNERSHP==10, ASECWTH),
+            INCOME = weighted.mean(HHINCOME, ASECWTH),
+            RETIREMENT = weighted.mean(INCRETIR, ASECWTH),
+            INTREST = weighted.mean(INTREST, ASECWTH),
+            PRICE = weighted.mean(`CPI-Adjusted Price`, ASECWTH),
+            WEIGHT = n(),
+            .groups="rowwise") %>%
+  drop_na()
+
+annual_rates_train <- annual_rates %>%
+  filter(!(YEAR %in% c(2023, 2022, 2021, 2020, 2019)))
+
+annual_rates_withheld <- annual_rates %>%
+  filter(YEAR %in% c(2023, 2022, 2021, 2020, 2019))
+```
+
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+gam_full_withheld <- gam(RATE ~ s(INCOME, GEN, bs='fs', k=3, m=c(3, 2, 1, 0)) + s(PRICE, k=10, m=2) + s(INTREST, k=10, m=2), data=annual_rates_train, family=binomial, weights=WEIGHT)
+```
+
+```{r echo=FALSE}
+crit <- qnorm((1 - 0.95) / 2, lower.tail = FALSE)
+pred <- as.data.frame(predict(gam_full_withheld, annual_rates, se.fit = TRUE, type="response"))
+pred$upr_ci <- pred$fit + (crit * pred$se.fit)
+pred$lwr_ci <- pred$fit - (crit * pred$se.fit)
+plot_data <- cbind(annual_rates, pred)
+
+plot3 <- plot_data %>%
+  ggplot(aes(x=YEAR)) +
+  geom_ribbon(aes(ymin = 100*lwr_ci, ymax=100*upr_ci, fill=GEN), alpha=0.2) +
+  geom_point(aes(y=100*RATE, color=GEN), size=1.5) +
+  geom_line(aes(y=100*fit, color=GEN), linewidth=1, alpha=1) +
+  ylim(0, 100) +
+  theme(legend.position="bottom", legend.title=element_blank()) +
+  labs(x="Year", y="Home Owneship Rate (%)", title="2019-2023 projection compared against true 5 year trend") +
+  geom_vline(xintercept=2018, linetype="dotted")
+ggplotly(plot3)
+```
+
+\
+This plot shows a predicted home ownership trend between 2019-2023 (past the 
+dotted line) that was predicted using a GAM with average income of a generation,
+median home price, and average 30-year fixed mortgage rate. The true values of
+home ownership are shown as the dots and the solid line is the home ownership
+predicted by the GAM, the report contains more details about the modelling.
+
+### Citations
+
+Geojson for states:
+
+https://rstudio.github.io/leaflet/json/us-states.geojson
+
+\
+Geojson for counties:
+
+https://gist.github.com/sdwfrost/d1c73f91dd9d175998ed166eb216994a
